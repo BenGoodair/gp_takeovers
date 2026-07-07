@@ -1,5 +1,17 @@
 rm(list = ls())
 
+####intro and guide####
+
+#Welcome to the coding file for a research study analysing the corporate delivery of primary care in England.
+#All underlying data to this file are published at https://github.com/BenGoodair/gp_takeovers/tree/main/Data
+#The code uses curl to pull the data directly from the github page, this a) signposts what data comes from where and b) should make it replicable, depending on dependencies and packages.
+#Code used to clean the underlying data is available at https://github.com/BenGoodair/gp_takeovers/blob/main/01.5_manual_downloads.R
+#This file is structured with some data merging of all the different underlying datasets into a master_df, followed by the analyses as per the order of the paper
+#Analyses are separated by headings with four hashtages
+#All supplementary material analyses are included in this file, at the end of the document.
+#For now the code uses stored objects in order, for final publication, each analysis will run from raw data in separately published functions
+#Some of the appendix will require re-running the main models before working.
+
 
 suppressPackageStartupMessages({
   library(tidyverse)
@@ -11,20 +23,15 @@ suppressPackageStartupMessages({
   library(broom)
   library(glue)
   library(ggrepel)
+  library(curl)
   library(viridis)
 })
 
-DATA_DIR <- path.expand(
-  "~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data"
-)
-FIG_DIR <- file.path(DATA_DIR, "Figures")
-dir.create(FIG_DIR, showWarnings = FALSE, recursive = TRUE)
+# DATA_DIR <- path.expand(
+#   "~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data"
+# )
 
-cat(rep("=", 80), "\n", sep = "")
-cat("GP TAKEOVERS — TWO-STAGE ANALYSIS\n")
-cat("Data directory:   ", DATA_DIR, "\n")
-cat("Figure directory: ", FIG_DIR, "\n")
-cat(rep("=", 80), "\n\n", sep = "")
+
 
 
 # Colour palette: muted, accessible, colourblind-safe
@@ -37,13 +44,7 @@ PAL <- c(
 COL_CHAIN <- PAL["Corporation"]
 COL_IND   <- PAL["Independent"]
 
-# Drug-class palette (4 classes)
-PAL_DRUG <- c(
-  ALL_DRUGS       = "#4C4C4C",
-  ANTIBIOTICS     = "#2D7F5E",
-  ANTIDEPRESSANTS = "#9B4A9E",
-  OPIOIDS         = "#C8392B"
-)
+
 
 # Staff-category palette (5 categories)
 PAL_STAFF <- c(
@@ -64,39 +65,19 @@ BOX_W       <- 0.40
 
 
 #### LOAD DATA####
-cat("Loading data...\n")
 
-# ownership     <- read_csv(file.path(DATA_DIR, "practice_ownership_map.csv"),
-#                           show_col_types = FALSE)
 
-ownership_annual     <- read_csv(file.path(DATA_DIR, "practice_ownership_annual.csv"),
-                          show_col_types = FALSE)
+
+ownership_annual <- read_csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/practice_ownership_annual.csv"))
 
 ownership_annual <- ownership_annual %>%dplyr::mutate(ownership_category=ifelse(ownership_category=="Chain", "Corporation", ownership_category))
 
-# takeover_evts <- read_csv(file.path(DATA_DIR, "takeover_events_all.csv"),
-#                           show_col_types = FALSE) %>%
-#   mutate(takeover_date = as.Date(takeover_date))
+patient_sat <- read_csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/patient_satisfaction.csv"))
 
-patient_sat <- read_csv(file.path(DATA_DIR, "patient_satisfaction.csv"),
-                        show_col_types = FALSE)
 
-# workforce_raw <- read_csv(file.path(DATA_DIR, "workforce_panel_all.csv"),
-#                           show_col_types = FALSE) %>%
-#   mutate(snap_date = as.Date(snap_date))%>%
-#   dplyr::mutate(GP_FTE_EXCL_LOC = GP_FTE_TOTAL - GP_LOCUM_FTE)
-
-workforce_annual <- read_csv(file.path(DATA_DIR, "workforce_annual.csv"),
-                             show_col_types = FALSE) %>%
+workforce_annual <- read_csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/workforce_annual.csv")) %>%
   dplyr::mutate(GP_LOCUM_FTE = parse_number(TOTAL_GP_FTE) - parse_number(TOTAL_GP_EXL_FTE))
 
-# appt_raw <- read_csv(file.path(DATA_DIR, "appt_panel_all.csv"),
-#                           show_col_types = FALSE) %>%
-#   mutate(snap_date = as.Date(snap_date))
-
-# presc_raw     <- read_csv(file.path(DATA_DIR, "presc_panel_all.csv"),
-#                           show_col_types = FALSE) %>%
-#   mutate(date = as.Date(date))
 
 
 
@@ -113,14 +94,6 @@ workforce_annual <- workforce_annual %>%
   )
 
 
-
-# # Prescribing cross-section: latest month per practice × drug class
-# presc_cross <- presc_raw %>%
-#   left_join(ownership, by = "PRACTICE_CODE") %>%
-#   filter(!is.na(ownership_category)) %>%
-#   group_by(PRACTICE_CODE, drug_class, ownership_category) %>%
-#   filter(date == max(date, na.rm = TRUE)) %>%
-#   ungroup()
 
 library(dplyr)
 library(tidyr)
@@ -170,7 +143,6 @@ workforce_long <- workforce_annual %>%
   ) %>%
   mutate(metric_label = factor(STAFF_METRICS[metric], levels = unname(STAFF_METRICS)))
 
-# Remove extreme outliers only for Fig 1A
 
 workforce_time <- workforce_annual %>%
   rename(PRACTICE_CODE = PRAC_CODE) %>%
@@ -219,11 +191,11 @@ patient_time <- patient_clean %>%
 
 
 
-qof <- read.csv("/Users/wolf6040/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/qof_annual.csv")%>%
+qof <- read.csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/qof_annual.csv"))%>%
   dplyr::rename(PRACTICE_CODE = PRAC_CODE)%>%
   left_join(ownership_annual, by = c("PRACTICE_CODE", "year"))
 
-inspections <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/Children's Care Homes Project/CQC_API_materials/data/complete inspection and location data noncare homes_ben_feb2025v2.csv")
+las <- read.csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/las.csv"))
 
 
 
@@ -251,20 +223,17 @@ master_df <- master_df %>%
 
 
 
-las <- inspections%>%
-  dplyr::select(locationodscode, locationlocalauthority, locationregion)%>%
-  dplyr::distinct()
 
 master_df <- master_df %>%
   dplyr::left_join(., las%>%
                      dplyr::rename(PRAC_CODE = locationodscode))
 
-lifeex <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/life_expectancy.csv")
+lifeex <- read.csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/life_expectancy.csv"))
 
-qof_prev <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/qof_annual_prev.csv")
+qof_prev <- read.csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/qof_annual_prev.csv"))
 
 
-imd <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/imd.csv")
+imd <- read.csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/imd.csv"))
 
 
 
@@ -287,7 +256,7 @@ master_df <- master_df %>%
 
 
 
-pay <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/nhs_pay.csv")
+pay <- read.csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/nhs_pay.csv"))
 
 
 pay <- pay %>%
@@ -318,7 +287,7 @@ master_df <- master_df %>%
   ) %>%
   dplyr::ungroup()
 
-write_csv(master_df, "~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/master_data_GPs_May.csv")
+#write_csv(master_df, "~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/master_data_GPs_May.csv")
 
 ####table 1####
 library(gt)
@@ -379,6 +348,212 @@ gt_table <- as_gt(summary_table) %>%
   )
 
 gt_table
+
+
+
+
+####Figure 1####
+comp_vals <- ownership_annual %>%
+  summarise(n = n_distinct(PRACTICE_CODE))
+
+comp_vals <- ownership_annual %>%
+  dplyr::filter(ownership_category=="Corporation")%>%
+  summarise(n = n_distinct(PRACTICE_CODE))
+
+
+chain_share_year <- ownership_annual %>%
+  dplyr::filter(PRACTICE_CODE %in% patient_clean$PRACTICE_CODE) %>%
+  distinct(PRACTICE_CODE, year, ownership_category) %>%
+  group_by(year) %>%
+  summarise(
+    n_total = n(),
+    n_chain = sum(ownership_category == "Corporation", na.rm = TRUE),
+    pct_chain = 100 * n_chain / n_total,
+    .groups = "drop"
+  ) %>%
+  filter(!is.na(pct_chain), year>2012)
+
+# Optional end labels
+chain_labels <- chain_share_year %>%
+  dplyr::slice(c(1, n())) %>%
+  mutate(lbl = sprintf("%.1f%%", pct_chain))
+
+chdata <-  read.csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/gp_company_data_2.csv"))
+
+
+
+cqcref <- read.csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/cqcref.csv"))
+
+orgs <- cqcref %>%
+  left_join(
+    chdata,
+    by = c("providercompanieshousenumber" = "company_number")
+  ) %>%
+  filter(ownershipType == "Organisation") %>%
+  mutate(
+    refined_ownership = case_when(
+      !is.na(providercharitynumber) & providercharitynumber != "" ~ "Charity",
+      is_community_interest_company == TRUE |
+        is_community_interest_company == "True" ~ "CIC",
+      company_type %in% c(
+        "private-limited-guarant-nsc",
+        "private-limited-guarant-nsc-limited-exemption",
+        "registered-society-non-jurisdictional"
+      ) ~ "Other non-profit",
+      company_type %in% c("ltd", "llp") ~ "For-profit company",
+      TRUE ~ NA_character_
+    )
+  )
+
+check <- orgs %>%
+  dplyr::filter(is.na(refined_ownership))
+
+
+plot_org <- orgs %>%
+  dplyr::select(refined_ownership, locationodscode )%>%
+  dplyr::distinct(.keep_all = T)
+
+unique_GPs <- patient_clean %>%
+  dplyr::select(PRACTICE_CODE, Practice_Name)%>%
+  dplyr::distinct(.keep_all=T)
+
+
+plot_org <- plot_org %>%
+  dplyr::left_join(.,  unique_GPs,   by = c("locationodscode" = "PRACTICE_CODE")
+  )
+
+
+
+library(dplyr)
+library(ggplot2)
+library(forcats)
+library(scales)
+
+# Harmonious palette aligned with your existing figures
+PAL_OWNERSHIP <- c(
+  `For-profit company` = "#1A6FBF",  # blue
+  Charity              = "#D4622A",  # orange
+  `CIC`                = "#6DAD60",  # green
+  `Other non-profit`   = "#9B4A9E",  # purple
+  Missing              = "grey70"
+)
+
+ownership_df <- plot_org %>%
+  mutate(
+    refined_ownership = fct_explicit_na(refined_ownership, na_level = "Missing")
+  ) %>%
+  dplyr::count(refined_ownership, name = "n") %>%
+  mutate(
+    refined_ownership = fct_reorder(refined_ownership, n)
+  )
+
+fig_ownership <- ggplot(
+  ownership_df,
+  aes(x = refined_ownership, y = n, fill = refined_ownership)
+) +
+  geom_col(width = 0.68, colour = "grey25", linewidth = 0.25) +
+  geom_text(
+    aes(label = n),
+    hjust = -0.10,
+    size = 2.7,
+    colour = "grey20"
+  ) +
+  coord_flip(clip = "off") +
+  scale_fill_manual(values = PAL_OWNERSHIP, drop = FALSE) +
+  scale_y_continuous(
+    expand = expansion(mult = c(0, 0.10)),
+    labels = label_number()
+  ) +
+  labs(
+    title = "Ownership type of Corporate-run GP Practices",
+    x = NULL,
+    y = "Count"
+  ) +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(size = BASE_SIZE + 1, face = "bold"),
+    axis.title = element_text(size = AXIS_SIZE),
+    axis.text = element_text(size = AXIS_SIZE),
+    panel.grid.major.y = element_blank()
+  )+
+  pub_theme
+
+
+
+
+fig1_E <- ggplot(chain_share_year, aes(x = year, y = pct_chain)) +
+  geom_area(fill = COL_CHAIN, alpha = 0.18) +
+  geom_line(linewidth = 1.1, colour = COL_CHAIN) +
+  geom_point(size = 1.8, colour = COL_CHAIN) +
+  geom_text(
+    data = chain_labels,
+    aes(label = lbl),
+    vjust = if_else(chain_labels$year == min(chain_labels$year), -0.8, 1.2),
+    fontface = "bold",
+    size = 3.0,
+    colour = COL_CHAIN
+  ) +
+  scale_x_continuous(breaks = c(2013, 2014,
+                                2015, 2016,
+                                2017, 2018,
+                                2019, 2020,
+                                2021, 2022,
+                                2023, 2024,
+                                2025, 2026)) +
+  scale_y_continuous(
+    limits = c(0, max(chain_share_year$pct_chain, na.rm = TRUE) * 1.15),
+    labels = label_number(accuracy = 1, suffix = "%"),
+    expand = expansion(mult = c(0, 0.02))
+  ) +
+  labs(
+    title = "Share of practices run by a corporation",
+    x = NULL,
+    y = "% of practices"
+  ) +
+  pub_theme +
+  theme(
+    legend.position = "none",
+    plot.margin = margin(5, 5, 0, 5),
+    axis.title.x = element_blank()
+  )
+
+
+
+
+treatment_timing <- read.csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/takeover_events_all_chain.csv"))%>%
+  dplyr::rename(PRACTICE_CODE = pre_practice_code)%>%
+  dplyr::mutate(g = factor(takeover_year))%>%
+  dplyr::group_by(g)%>%
+  dplyr::summarise(n_takeovers = n())%>%
+  dplyr::ungroup()
+
+fig1_f <- ggplot(treatment_timing, aes(x = g, y = n_takeovers)) +
+  geom_col() +
+  labs(
+    title = "Number of corporate GP takeovers each year",
+    x = "Year",
+    y = "n of practices"
+  ) +
+  pub_theme +
+  scale_x_discrete(breaks = c("2013", "2014",
+                              "2015", "2016",
+                              "2017", "2018",
+                              "2019", "2020",
+                              "2021", "2022",
+                              "2023", "2024",
+                              "2025", "2026")) +
+  theme(
+    legend.position = "none",
+    plot.margin = margin(5, 5, 0, 5),
+  )
+
+
+fig1_E/fig1_f|fig_ownership
+
+
+
+
+
 ####Figure 2####
 
 fig1_A <- ggplot(
@@ -520,7 +695,7 @@ fig1_D <- ggplot(
 
 
 
-qof <- read.csv("/Users/wolf6040/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/qof_annual.csv")%>%
+qof <- read.csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/qof_annual.csv"))%>%
   dplyr::rename(PRACTICE_CODE = PRAC_CODE)%>%
   left_join(ownership_annual, by = c("PRACTICE_CODE", "year"))
 
@@ -618,515 +793,8 @@ figure_1_panel
 
 
 
-####Figure 1####
-comp_vals <- ownership_annual %>%
-  summarise(n = n_distinct(PRACTICE_CODE))
-
-comp_vals <- ownership_annual %>%
-  dplyr::filter(ownership_category=="Corporation")%>%
-  summarise(n = n_distinct(PRACTICE_CODE))
-
-
-chain_share_year <- ownership_annual %>%
-  dplyr::filter(PRACTICE_CODE %in% patient_clean$PRACTICE_CODE) %>%
-  distinct(PRACTICE_CODE, year, ownership_category) %>%
-  group_by(year) %>%
-  summarise(
-    n_total = n(),
-    n_chain = sum(ownership_category == "Corporation", na.rm = TRUE),
-    pct_chain = 100 * n_chain / n_total,
-    .groups = "drop"
-  ) %>%
-  filter(!is.na(pct_chain), year>2012)
-
-# Optional end labels
-chain_labels <- chain_share_year %>%
-  slice(c(1, n())) %>%
-  mutate(lbl = sprintf("%.1f%%", pct_chain))
-
-chdata <-  read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/gp_company_data_2.csv")
-
-cqc <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/Children's Care Homes Project/CQC_API_materials/data/complete inspection and location data noncare homes_ben_feb2025v2.csv")
-prov  <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/Children's Care Homes Project/CQC_API_materials/data/providers_info_batch_all.csv")
-
-
-cqcref <- cqc %>%
-  filter(locationtypesector == "Primary Medical Services",
-         locationodscode %in% patient_clean$PRACTICE_CODE) %>%
-  left_join(prov %>% select(providerId, ownershipType),
-            by = c("providerid" = "providerId")) %>%
-  mutate(
-    ownership_category = case_when(
-      ownershipType %in% c("Individual", "Partnership", "NHS Body") ~ "Independent",
-      ownershipType == "Organisation"                                ~ "Corporation",
-      TRUE                                                            ~ NA_character_
-    )
-  )%>%
-  dplyr::select(ownership_category, ownershipType, locationid, locationodscode, registrationdate, providerid, locationname, providername, providercompanieshousenumber, providercharitynumber)%>%
-  dplyr::distinct(.keep_all = T)
-  
-
-orgs <- cqcref %>%
-  mutate(
-    providercompanieshousenumber = ifelse(
-      nchar(providercompanieshousenumber) == 7 ,
-      paste0("0", providercompanieshousenumber),
-      providercompanieshousenumber
-    )
-  )%>%
-  dplyr::left_join(
-    chdata,
-    by = c("providercompanieshousenumber" = "company_number")
-  )%>%
-  dplyr::filter(ownershipType=="Organisation")%>%
-  mutate(refined_ownership = ifelse(providercharitynumber!="", "Charity",
-                                    ifelse(is_community_interest_company=="True", "CIC",
-                                           ifelse(company_type=="private-limited-guarant-nsc", "Other non-profit",
-                                                  ifelse(company_type=="registered-society-non-jurisdictional", "Other non-profit",
-                                                         ifelse(company_type == "private-limited-guarant-nsc-limited-exemption", "Other non-profit",
-                                                         ifelse(company_type=="ltd", "For-profit company",
-                                                                ifelse(company_type=="llp", "For-profit company", NA))))))))
-
-
-
-
-check <- orgs %>%
-  dplyr::filter(is.na(refined_ownership))
-
-
-plot_org <- orgs %>%
-  dplyr::select(refined_ownership, locationodscode )%>%
-  dplyr::distinct(.keep_all = T)
-
-unique_GPs <- patient_clean %>%
-  dplyr::select(PRACTICE_CODE, Practice_Name)%>%
-  dplyr::distinct(.keep_all=T)
-
-
-plot_org <- plot_org %>%
-  dplyr::left_join(.,  unique_GPs,   by = c("locationodscode" = "PRACTICE_CODE")
-)
-  
-
-  
-library(dplyr)
-library(ggplot2)
-library(forcats)
-library(scales)
-
-# Harmonious palette aligned with your existing figures
-PAL_OWNERSHIP <- c(
-  `For-profit company` = "#1A6FBF",  # blue
-  Charity              = "#D4622A",  # orange
-  `CIC`                = "#6DAD60",  # green
-  `Other non-profit`   = "#9B4A9E",  # purple
-  Missing              = "grey70"
-)
-
-ownership_df <- plot_org %>%
-  mutate(
-    refined_ownership = fct_explicit_na(refined_ownership, na_level = "Missing")
-  ) %>%
-  dplyr::count(refined_ownership, name = "n") %>%
-  mutate(
-    refined_ownership = fct_reorder(refined_ownership, n)
-  )
-
-fig_ownership <- ggplot(
-  ownership_df,
-  aes(x = refined_ownership, y = n, fill = refined_ownership)
-) +
-  geom_col(width = 0.68, colour = "grey25", linewidth = 0.25) +
-  geom_text(
-    aes(label = n),
-    hjust = -0.10,
-    size = 2.7,
-    colour = "grey20"
-  ) +
-  coord_flip(clip = "off") +
-  scale_fill_manual(values = PAL_OWNERSHIP, drop = FALSE) +
-  scale_y_continuous(
-    expand = expansion(mult = c(0, 0.10)),
-    labels = label_number()
-  ) +
-  labs(
-    title = "Ownership type of Corporate-run GP Practices",
-    x = NULL,
-    y = "Count"
-  ) +
-  theme(
-    legend.position = "none",
-    plot.title = element_text(size = BASE_SIZE + 1, face = "bold"),
-    axis.title = element_text(size = AXIS_SIZE),
-    axis.text = element_text(size = AXIS_SIZE),
-    panel.grid.major.y = element_blank()
-  )+
-  pub_theme
-
-
-
-
-fig1_E <- ggplot(chain_share_year, aes(x = year, y = pct_chain)) +
-  geom_area(fill = COL_CHAIN, alpha = 0.18) +
-  geom_line(linewidth = 1.1, colour = COL_CHAIN) +
-  geom_point(size = 1.8, colour = COL_CHAIN) +
-  geom_text(
-    data = chain_labels,
-    aes(label = lbl),
-    vjust = if_else(chain_labels$year == min(chain_labels$year), -0.8, 1.2),
-    fontface = "bold",
-    size = 3.0,
-    colour = COL_CHAIN
-  ) +
-  scale_x_continuous(breaks = c(2013, 2014,
-                                2015, 2016,
-                                2017, 2018,
-                                2019, 2020,
-                                2021, 2022,
-                                2023, 2024,
-                                2025, 2026)) +
-  scale_y_continuous(
-    limits = c(0, max(chain_share_year$pct_chain, na.rm = TRUE) * 1.15),
-    labels = label_number(accuracy = 1, suffix = "%"),
-    expand = expansion(mult = c(0, 0.02))
-  ) +
-  labs(
-    title = "Share of practices run by a corporation",
-    x = NULL,
-    y = "% of practices"
-  ) +
-  pub_theme +
-  theme(
-    legend.position = "none",
-    plot.margin = margin(5, 5, 0, 5),
-    axis.title.x = element_blank()
-  )
-
-
-
-
-treatment_timing <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/takeover_events_all_chain.csv")%>%
-  dplyr::rename(PRACTICE_CODE = pre_practice_code)%>%
-  dplyr::mutate(g = factor(takeover_year))%>%
-  dplyr::group_by(g)%>%
-  dplyr::summarise(n_takeovers = n())%>%
-  dplyr::ungroup()
-
-fig1_f <- ggplot(treatment_timing, aes(x = g, y = n_takeovers)) +
-  geom_col() +
-  labs(
-    title = "Number of corporate GP takeovers each year",
-    x = "Year",
-    y = "n of practices"
-  ) +
-  pub_theme +
-  scale_x_discrete(breaks = c("2013", "2014",
-                                "2015", "2016",
-                                "2017", "2018",
-                                "2019", "2020",
-                                "2021", "2022",
-                                "2023", "2024",
-                                "2025", "2026")) +
-  theme(
-    legend.position = "none",
-    plot.margin = margin(5, 5, 0, 5),
-  )
-
-
-fig1_E/fig1_f|fig_ownership
-
-
-
-
-
-
-
-
-
-##for-profit fig##
-
-fp_lookup <- plot_org %>%
-  dplyr::rename(PRACTICE_CODE = locationodscode)
-  
-PAL <- c(
-  "Non-profit" = "#FFD700",
-  "For-profit" = "#8C000F",
-  "Independent" = "#D4622A"    
-)
-
-
-fig1_A <- ggplot(
-  workforce_long_A%>%
-    dplyr::left_join(., fp_lookup)%>%
-    dplyr::mutate(profit = ifelse(refined_ownership=="For-profit company", "For-profit", "Non-profit"),
-                  profit = ifelse(ownership_category=="Independent", "Independent", profit),
-                  profit = factor(
-                    profit,
-                    levels = c("Independent", "Non-profit", "For-profit")
-                  ))%>%
-    dplyr::filter(!is.na(profit)),
-  aes(x = value, y = profit, fill = profit, colour = profit)
-) +
-  ggdist::stat_halfeye(
-    orientation = "y",
-    adjust = 0.9,
-    width = 0.55,
-    .width = 0,
-    justification = -0.22,
-    point_colour = NA,
-    alpha = 0.80
-  )  +
-  geom_point(
-    position = position_jitter(height = 0.08, width = 0, seed = 1),
-    size = 0.45,
-    alpha = 0.35,
-    stroke = 0
-  ) +
-  geom_boxplot(
-    orientation = "y",
-    width = 0.18,
-    outlier.shape = NA,
-    linewidth = 0.35,
-    fill = NA,
-    colour = "grey25"
-  )+
-  stat_summary(
-    fun = mean,
-    geom = "point",
-    shape = 18,
-    size = 2.8,
-    fill = "black",
-    colour = "black",    show.legend = FALSE
-  ) +
-  facet_wrap(~ metric_label, scales = "free_x", nrow = 1) +
-  scale_fill_manual(values = PAL, drop = FALSE) +
-  scale_colour_manual(values = PAL, drop = FALSE) +
-  scale_x_continuous(labels = label_number(accuracy = 0.01)) +
-  labs(
-    title = "A. Workforce supply",
-    x = "FTE per 1,000 registered patients",
-    y = NULL
-  ) +
-  pub_theme
-
-
-fig1_C <- ggplot(
-  patient_cross %>% filter(!is.na(ownership_category), !is.na(value))%>%
-    dplyr::left_join(., fp_lookup)%>%
-    dplyr::mutate(profit = ifelse(refined_ownership=="For-profit company", "For-profit", "Non-profit"),
-                  profit = ifelse(ownership_category=="Independent", "Independent", profit),
-                  profit = factor(
-                    profit,
-                    levels = c("Independent", "Non-profit", "For-profit")
-                  ))%>%
-    dplyr::filter(!is.na(profit)),
-  aes(x = value, y = profit, fill = profit, colour = profit)
-) +
-  ggdist::stat_halfeye(
-    orientation = "y",
-    adjust = 1.2,
-    width = 0.55,
-    .width = 0,
-    justification = -0.22,
-    point_colour = NA,
-    alpha = 0.80
-  ) +
-  geom_point(
-    position = position_jitter(height = 0.08, width = 0, seed = 1),
-    size = 0.45,
-    alpha = 0.35,
-    stroke = 0
-  ) +
-  geom_boxplot(
-    orientation = "y",
-    width = 0.18,
-    outlier.shape = NA,
-    linewidth = 0.35,
-    fill = NA,
-    colour = "grey25"
-  ) +
-  stat_summary(
-    fun = mean,
-    geom = "point",
-    shape = 18,
-    size = 2.8,
-    fill = "black",
-    colour = "black",
-    show.legend = FALSE
-  )+
-  facet_wrap(~ metric_label, scales = "free_x", nrow = 1) +
-  scale_fill_manual(values = PAL, drop = FALSE) +
-  scale_colour_manual(values = PAL, drop = FALSE) +
-  scale_x_continuous(labels = label_number(accuracy = 1, suffix = "%")) +
-  labs(
-    title = "C  Patient experience",
-    x = "Patients reporting good experience (%)",
-    y = NULL
-  ) +
-  pub_theme
-
-
-qof <- read.csv("/Users/wolf6040/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/qof_annual.csv")%>%
-  dplyr::rename(PRACTICE_CODE = PRAC_CODE)%>%
-  left_join(ownership_annual, by = c("PRACTICE_CODE", "year"))
-
-
-
-
-
-fig1_Cqof <- ggplot(
-  qof %>% filter(!is.na(ownership_category), !is.na(VALUE))%>%
-    dplyr::group_by(PRACTICE_CODE,ownership_category, VALUE)%>%
-    dplyr::summarise(VALUE = mean(VALUE, na.rm=T))%>%
-    dplyr::ungroup()%>%
-    dplyr::left_join(., fp_lookup)%>%
-    dplyr::mutate(profit = ifelse(refined_ownership=="For-profit company", "For-profit", "Non-profit"),
-                  profit = ifelse(ownership_category=="Independent", "Independent", profit),
-                  profit = factor(
-                    profit,
-                    levels = c("Independent", "Non-profit", "For-profit")
-                  ))%>%
-    dplyr::filter(!is.na(profit)),
-  aes(x = VALUE, y = profit, fill = profit, colour = profit)
-) +
-  ggdist::stat_halfeye(
-    orientation = "y",
-    adjust = 1.2,
-    width = 0.55,
-    .width = 0,
-    justification = -0.22,
-    point_colour = NA,
-    alpha = 0.80
-  ) +
-  geom_point(
-    position = position_jitter(height = 0.08, width = 0, seed = 1),
-    size = 0.45,
-    alpha = 0.35,
-    stroke = 0
-  ) +
-  geom_boxplot(
-    orientation = "y",
-    width = 0.18,
-    outlier.shape = NA,
-    linewidth = 0.35,
-    fill = NA,
-    colour = "grey25"
-  ) +
-  stat_summary(
-    fun = mean,
-    geom = "point",
-    shape = 18,
-    size = 2.8,
-    fill = "black",
-    colour = "black",
-    show.legend = FALSE
-  )+
-  scale_fill_manual(values = PAL, drop = FALSE) +
-  scale_colour_manual(values = PAL, drop = FALSE) +
-  scale_x_continuous(labels = label_number(accuracy = 1, suffix = "%")) +
-  labs(
-    title = "B. Quality Outcomes Framework (QOF)",
-    x = "Percentage of points achieved (%)",
-    y = NULL
-  ) +
-  pub_theme
-
-
-
-
-
-
-figure_1_panel <- (fig1_A ) /  (fig1_Cqof ) / (fig1_C )  +
-  plot_layout( guides = "collect")
-
-figure_1_panel
-
-
-
 ####Table 2: cross sectional regressions####
 
-
-master_df <- workforce_annual%>%
-  dplyr::full_join(.,qof %>%
-                     dplyr::select(PRACTICE_CODE, PRACTICE_NAME, VALUE, year)%>%
-                     dplyr::rename(PRAC_CODE = PRACTICE_CODE,
-                                   QOF_points = VALUE,
-                                   qof_name = PRACTICE_NAME))
-
-
-master_df <- master_df %>%
-  dplyr::full_join(., patient_clean%>%
-                     dplyr::select(PRACTICE_CODE, Practice_Name, appointment_good, overall_good, year)%>%
-                     rename(PRAC_CODE = PRACTICE_CODE,
-                            patient_name = Practice_Name))
-
-
-master_df <- master_df %>%
-  dplyr::left_join(., ownership_annual%>%
-                     dplyr::rename(PRAC_CODE = PRACTICE_CODE))
-
-
-
-
-
-las <- inspections%>%
-  dplyr::select(locationodscode, locationlocalauthority)%>%
-  dplyr::distinct()
-
-master_df <- master_df %>%
-  dplyr::left_join(., las%>%
-                     dplyr::rename(PRAC_CODE = locationodscode))
-
-lifeex <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/life_expectancy.csv")
-
-qof_prev <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/qof_annual_prev.csv")
-
-
-imd <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/imd.csv")
-
-
-
-
-
-master_df <- master_df %>%
-  dplyr::left_join(., lifeex%>%
-                     dplyr::rename(PRAC_CODE = gp_code)%>%
-                     dplyr::select(-X))
-
-master_df <- master_df %>%
-  dplyr::left_join(., qof_prev%>%
-                     dplyr::rename(PRAC_CODE = gp_code)%>%
-  dplyr::select(-X))
-
-master_df <- master_df %>%
-  dplyr::left_join(., imd%>%
-                     dplyr::rename(PRAC_CODE = gp_code)%>%
-  dplyr::select(-X))
-
-
-
-
-pay <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/nhs_pay.csv")
-
-pay <- pay %>%
-  dplyr::mutate(
-    Dispensing_Practice = dplyr::na_if(Dispensing_Practice, "UNKNOWN"),
-    Dispensing_Practice = dplyr::na_if(Dispensing_Practice, "Unknown"),
-    Practice_Rurality = dplyr::na_if(Practice_Rurality, "MISSING"),
-    Practice_Rurality = dplyr::na_if(Practice_Rurality, "Missing")
-  ) %>%
-  dplyr::group_by(Practice_Code) %>%
-  tidyr::fill(
-    Dispensing_Practice,
-    Practice_Rurality,
-    .direction = "updown"
-  ) %>%
-  dplyr::ungroup()
-  
-  
-
-master_df <-master_df%>% dplyr::left_join(., pay%>%
-                                            dplyr::rename(PRAC_CODE = Practice_Code))
 
 
 library(dplyr)
@@ -1243,7 +911,7 @@ workforce_raw <-workforce_annual %>% dplyr::select(PRAC_CODE, TOTAL_GP_FTE, TOTA
 metrics_wide <- merge(metrics_wide, workforce_raw, by=c("year", "PRACTICE_CODE"), all=T)
 
 
-treatment_timing <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/takeover_events_all_chain.csv")%>%
+treatment_timing <- read.csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/takeover_events_all_chain.csv"))%>%
   dplyr::rename(PRACTICE_CODE = pre_practice_code)%>%
   dplyr::mutate(g = takeover_year)
 
@@ -1330,55 +998,7 @@ res_patients <- run_cs_did(panel_did_staff, "TOTAL_PATIENTS",   "patient list")
 
 
 
-summary(res_gp$att)
-summary(res_gp$dyn)
-summary(res_gp$grp)
-summary(res_gp$simp)
-
-
-summary(res_gp_raw$att)
-summary(res_gp_raw$dyn)
-summary(res_gp_raw$grp)
-summary(res_gp_raw$simp)
-
-
-summary(res_nu$att)
-summary(res_nu$dyn)
-summary(res_nu$grp)
-summary(res_nu$simp)
-
-summary(res_nu_raw$att)
-summary(res_nu_raw$dyn)
-summary(res_nu_raw$grp)
-summary(res_nu_raw$simp)
-
-summary(res_patients$att)
-summary(res_patients$dyn)
-summary(res_patients$grp)
-summary(res_patients$simp)
-
-
-print(res_gp$p_att)
-print(res_gp$p_dyn)
-print(res_gp$p_grp)
-
-print(res_gp_raw$p_att)
-print(res_gp_raw$p_dyn)
-print(res_gp_raw$p_grp)
-
-print(res_nu_raw$p_att)
-print(res_nu_raw$p_dyn)
-print(res_nu_raw$p_grp)
-
-print(res_patients$p_att)
-print(res_patients$p_dyn)
-print(res_patients$p_grp)
-
-
-
-
-
-treatment_timing <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/takeover_events_all_chain.csv")%>%
+treatment_timing <- read.csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/takeover_events_all_chain.csv"))%>%
   dplyr::rename(PRACTICE_CODE = pre_practice_code)%>%
   dplyr::mutate(g = takeover_year)
 
@@ -1416,46 +1036,6 @@ patient_panel <- patient_clean %>%
 stopifnot(!any(duplicated(patient_panel[c("practice_id", "year")])))
 
 
-run_cs_did <- function(df, outcome, outcome_label, control_group = "nevertreated") {
-  
-  d <- df %>%
-    select(practice_id, year, g, all_of(outcome)) %>%
-    filter(!is.na(.data[[outcome]]))
-  
-  att <- att_gt(
-    yname   = outcome,
-    tname   = "year",
-    idname  = "practice_id",
-    gname   = "g",
-    xformla = ~ 1,
-    data    = d,
-    panel   = TRUE,
-    allow_unbalanced_panel = TRUE,
-    control_group = control_group,
-    est_method = "reg"
-  )
-  
-  dyn <- aggte(
-    att,
-    type  = "dynamic",
-    min_e = -4,
-    max_e = 4,
-    na.rm = TRUE
-  )
-  grp  <- aggte(att, type = "group",   na.rm = TRUE)
-  simp <- aggte(att, type = "simple",  na.rm = TRUE)
-  
-  list(
-    att  = att,
-    dyn  = dyn,
-    grp  = grp,
-    simp = simp,
-    p_att = ggdid(att, title = paste0("Group-time ATT: ", outcome_label)),
-    p_dyn = ggdid(dyn, title = paste0("Event study: ", outcome_label)),
-    p_grp = ggdid(grp, title = paste0("Cohort effects: ", outcome_label))
-  )
-}
-
 set.seed(123)
 
 # If you have few never-treated practices, change control_group to "notyettreated"
@@ -1463,36 +1043,9 @@ res_app <- run_cs_did(patient_panel, "appointment_good", "Patient satisfaction w
 res_ovr <- run_cs_did(patient_panel, "overall_good", "Overall practice experience")
 
 
-summary(res_app$att)
-summary(res_app$dyn)
-summary(res_app$grp)
-summary(res_app$simp)
-
-summary(res_ovr$att)
-summary(res_ovr$dyn)
-summary(res_ovr$grp)
-summary(res_ovr$simp)
 
 
-print(res_app$p_att)
-print(res_app$p_dyn)
-print(res_app$p_grp)
-
-print(res_ovr$p_att)
-print(res_ovr$p_dyn)
-print(res_ovr$p_grp)
-
-
-
-
-
-
-
-
-
-
-
-treatment_timing <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/takeover_events_all_chain.csv")%>%
+treatment_timing <- read.csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/takeover_events_all_chain.csv"))%>%
   dplyr::rename(PRACTICE_CODE = pre_practice_code)%>%
   dplyr::mutate(g = takeover_year)
 
@@ -1525,63 +1078,11 @@ panel_did_qof <- qof %>%
 
 
 
-run_cs_did <- function(df, outcome, outcome_label, control_group = "nevertreated") {
-  
-  d <- df %>%
-    select(practice_id, PRACTICE_CODE, year, g, all_of(outcome)) %>%
-    filter(!is.na(.data[[outcome]]))
-  
-  att <- att_gt(
-    yname   = outcome,
-    tname   = "year",
-    idname  = "practice_id",
-    gname   = "g",
-    xformla = ~ 1,
-    data    = d,
-    panel   = TRUE,
-    allow_unbalanced_panel = TRUE,
-    control_group = control_group,
-    est_method = "reg"
-  )
-  
-  dyn <- aggte(
-    att,
-    type  = "dynamic",
-    min_e = -4,
-    max_e = 4,
-    na.rm = TRUE
-  )
-  grp  <- aggte(att, type = "group",  na.rm = TRUE)
-  simp <- aggte(att, type = "simple", na.rm = TRUE)
-  
-  list(
-    att  = att,
-    dyn  = dyn,
-    grp  = grp,
-    simp = simp,
-    p_att = ggdid(att, title = paste0("Group-time ATT: ", outcome_label)),
-    p_dyn = ggdid(dyn, title = paste0("Event study: ", outcome_label)),
-    p_grp = ggdid(grp, title = paste0("Cohort effects: ", outcome_label))
-  )
-}
-
 set.seed(123)
 
 # If you have few never-treated practices, try control_group = "notyettreated"
 res_qof <- run_cs_did(panel_did_qof, "qof_points",  "QOF points %")
 
-
-summary(res_qof$att)
-summary(res_qof$dyn)
-summary(res_qof$grp)
-summary(res_qof$simp)
-
-print(res_qof$p_att)
-print(res_qof$p_dyn)
-print(res_qof$p_grp)
-
-
-res_qof$att$DIDparams$data
 
 library(dplyr)
 library(purrr)
@@ -1637,7 +1138,7 @@ results_table %>%
 
 
 
-treatment_timing <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/takeover_events_all_chain.csv")%>%
+treatment_timing <- read.csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/takeover_events_all_chain.csv"))%>%
   dplyr::rename(PRACTICE_CODE = pre_practice_code)%>%
   dplyr::mutate(g = takeover_year)
 
@@ -1675,60 +1176,11 @@ panel_did <- panel_did %>%
   distinct(.keep_all = T)
 
 
-run_cs_did <- function(df, outcome, outcome_label, control_group = "nevertreated") {
-  
-  d <- df %>%
-    select(practice_id, PRACTICE_CODE, year, g, all_of(outcome)) %>%
-    filter(!is.na(.data[[outcome]]))
-  
-  att <- att_gt(
-    yname   = outcome,
-    tname   = "year",
-    idname  = "practice_id",
-    gname   = "g",
-    xformla = ~ 1,
-    data    = d,
-    panel   = TRUE,
-    allow_unbalanced_panel = TRUE,
-    control_group = control_group,
-    est_method = "reg"
-  )
-  
-  dyn <- aggte(
-    att,
-    type  = "dynamic",
-    min_e = -4,
-    max_e = 4,
-    na.rm = TRUE
-  )
-  grp  <- aggte(att, type = "group",  na.rm = TRUE)
-  simp <- aggte(att, type = "simple", na.rm = TRUE)
-  
-  list(
-    att  = att,
-    dyn  = dyn,
-    grp  = grp,
-    simp = simp,
-    p_att = ggdid(att, title = paste0("Group-time ATT: ", outcome_label)),
-    p_dyn = ggdid(dyn, title = paste0("Event study: ", outcome_label)),
-    p_grp = ggdid(grp, title = paste0("Cohort effects: ", outcome_label))
-  )
-}
-
 set.seed(123)
 
 # If you have few never-treated practices, try control_group = "notyettreated"
 res_spend <- run_cs_did(panel_did, "nhs_funding",  "NHS funding")
 
-
-summary(res_spend$att)
-summary(res_spend$dyn)
-summary(res_spend$grp)
-summary(res_spend$simp)
-
-print(res_spend$p_att)
-print(res_spend$p_dyn)
-print(res_spend$p_grp)
 
 
 
@@ -2192,92 +1644,7 @@ wrap_plots(
 
 ####raw outcome values cross sectional####
 
-master_df <- workforce_annual%>%
-  dplyr::full_join(.,qof %>%
-                     dplyr::select(PRACTICE_CODE, PRACTICE_NAME, VALUE, year)%>%
-                     dplyr::rename(PRAC_CODE = PRACTICE_CODE,
-                                   QOF_points = VALUE,
-                                   qof_name = PRACTICE_NAME))
 
-
-master_df <- master_df %>%
-  dplyr::full_join(., patient_clean%>%
-                     dplyr::select(PRACTICE_CODE, Practice_Name, appointment_good, overall_good, year)%>%
-                     rename(PRAC_CODE = PRACTICE_CODE,
-                            patient_name = Practice_Name))
-
-
-master_df <- master_df %>%
-  dplyr::left_join(., ownership_annual%>%
-                     dplyr::rename(PRAC_CODE = PRACTICE_CODE))
-
-
-
-
-
-las <- inspections%>%
-  dplyr::select(locationodscode, locationlocalauthority)%>%
-  dplyr::distinct()
-
-master_df <- master_df %>%
-  dplyr::left_join(., las%>%
-                     dplyr::rename(PRAC_CODE = locationodscode))
-
-lifeex <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/life_expectancy.csv")
-
-qof_prev <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/qof_annual_prev.csv")
-
-
-imd <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/imd.csv")
-
-
-
-
-
-master_df <- master_df %>%
-  dplyr::left_join(., lifeex%>%
-                     dplyr::rename(PRAC_CODE = gp_code)%>%
-                     dplyr::select(-X))
-
-master_df <- master_df %>%
-  dplyr::left_join(., qof_prev%>%
-                     dplyr::rename(PRAC_CODE = gp_code)%>%
-                     dplyr::select(-X))
-
-master_df <- master_df %>%
-  dplyr::left_join(., imd%>%
-                     dplyr::rename(PRAC_CODE = gp_code)%>%
-                     dplyr::select(-X))
-
-
-
-
-pay <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/nhs_pay.csv")
-
-pay <- pay %>%
-  dplyr::mutate(
-    Dispensing_Practice = dplyr::na_if(Dispensing_Practice, "UNKNOWN"),
-    Dispensing_Practice = dplyr::na_if(Dispensing_Practice, "Unknown"),
-    Practice_Rurality = dplyr::na_if(Practice_Rurality, "MISSING"),
-    Practice_Rurality = dplyr::na_if(Practice_Rurality, "Missing")
-  ) %>%
-  dplyr::group_by(Practice_Code) %>%
-  tidyr::fill(
-    Dispensing_Practice,
-    Practice_Rurality,
-    .direction = "updown"
-  ) %>%
-  dplyr::ungroup()
-
-
-
-master_df <-master_df%>% dplyr::left_join(., pay%>%
-                                            dplyr::rename(PRAC_CODE = Practice_Code))
-
-
-library(dplyr)
-library(modelsummary)
-library(sandwich)
 
 df <- master_df %>%
   mutate(
@@ -2386,7 +1753,7 @@ workforce_raw <-workforce_annual %>% dplyr::select(PRAC_CODE, TOTAL_GP_FTE, TOTA
 metrics_wide <- merge(metrics_wide, workforce_raw, by=c("year", "PRACTICE_CODE"), all=T)
 
 
-treatment_timing <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/takeover_events_all_chain.csv")%>%
+treatment_timing <- read.csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/takeover_events_all_chain.csv"))%>%
   dplyr::rename(PRACTICE_CODE = pre_practice_code)%>%
   dplyr::mutate(g = takeover_year)
 
@@ -2473,55 +1840,9 @@ res_patients <- run_cs_did(panel_did_staff, "TOTAL_PATIENTS",   "patient list")
 
 
 
-summary(res_gp$att)
-summary(res_gp$dyn)
-summary(res_gp$grp)
-summary(res_gp$simp)
 
 
-summary(res_gp_raw$att)
-summary(res_gp_raw$dyn)
-summary(res_gp_raw$grp)
-summary(res_gp_raw$simp)
-
-
-summary(res_nu$att)
-summary(res_nu$dyn)
-summary(res_nu$grp)
-summary(res_nu$simp)
-
-summary(res_nu_raw$att)
-summary(res_nu_raw$dyn)
-summary(res_nu_raw$grp)
-summary(res_nu_raw$simp)
-
-summary(res_patients$att)
-summary(res_patients$dyn)
-summary(res_patients$grp)
-summary(res_patients$simp)
-
-
-print(res_gp$p_att)
-print(res_gp$p_dyn)
-print(res_gp$p_grp)
-
-print(res_gp_raw$p_att)
-print(res_gp_raw$p_dyn)
-print(res_gp_raw$p_grp)
-
-print(res_nu_raw$p_att)
-print(res_nu_raw$p_dyn)
-print(res_nu_raw$p_grp)
-
-print(res_patients$p_att)
-print(res_patients$p_dyn)
-print(res_patients$p_grp)
-
-
-
-
-
-treatment_timing <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/takeover_events_all_chain.csv")%>%
+treatment_timing <- read.csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/takeover_events_all_chain.csv"))%>%
   dplyr::rename(PRACTICE_CODE = pre_practice_code)%>%
   dplyr::mutate(g = takeover_year)
 
@@ -2559,46 +1880,6 @@ patient_panel <- patient_clean %>%
 stopifnot(!any(duplicated(patient_panel[c("practice_id", "year")])))
 
 
-run_cs_did <- function(df, outcome, outcome_label, control_group = "nevertreated") {
-  
-  d <- df %>%
-    select(practice_id, year, g, all_of(outcome)) %>%
-    filter(!is.na(.data[[outcome]]))
-  
-  att <- att_gt(
-    yname   = outcome,
-    tname   = "year",
-    idname  = "practice_id",
-    gname   = "g",
-    xformla = ~ 1,
-    data    = d,
-    panel   = TRUE,
-    allow_unbalanced_panel = TRUE,
-    control_group = control_group,
-    est_method = "reg"
-  )
-  
-  dyn <- aggte(
-    att,
-    type  = "dynamic",
-    min_e = -4,
-    max_e = 4,
-    na.rm = TRUE
-  )
-  grp  <- aggte(att, type = "group",   na.rm = TRUE)
-  simp <- aggte(att, type = "simple",  na.rm = TRUE)
-  
-  list(
-    att  = att,
-    dyn  = dyn,
-    grp  = grp,
-    simp = simp,
-    p_att = ggdid(att, title = paste0("Group-time ATT: ", outcome_label)),
-    p_dyn = ggdid(dyn, title = paste0("Event study: ", outcome_label)),
-    p_grp = ggdid(grp, title = paste0("Cohort effects: ", outcome_label))
-  )
-}
-
 set.seed(123)
 
 # If you have few never-treated practices, change control_group to "notyettreated"
@@ -2606,36 +1887,9 @@ res_app <- run_cs_did(patient_panel, "appointment_good", "Patient satisfaction w
 res_ovr <- run_cs_did(patient_panel, "overall_good", "Overall practice experience")
 
 
-summary(res_app$att)
-summary(res_app$dyn)
-summary(res_app$grp)
-summary(res_app$simp)
-
-summary(res_ovr$att)
-summary(res_ovr$dyn)
-summary(res_ovr$grp)
-summary(res_ovr$simp)
 
 
-print(res_app$p_att)
-print(res_app$p_dyn)
-print(res_app$p_grp)
-
-print(res_ovr$p_att)
-print(res_ovr$p_dyn)
-print(res_ovr$p_grp)
-
-
-
-
-
-
-
-
-
-
-
-treatment_timing <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/takeover_events_all_chain.csv")%>%
+treatment_timing <- read.csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/takeover_events_all_chain.csv"))%>%
   dplyr::rename(PRACTICE_CODE = pre_practice_code)%>%
   dplyr::mutate(g = takeover_year)
 
@@ -2667,46 +1921,6 @@ panel_did_qof <- qof %>%
                     qof_points = (qof_points))
 
 
-
-run_cs_did <- function(df, outcome, outcome_label, control_group = "nevertreated") {
-  
-  d <- df %>%
-    select(practice_id, PRACTICE_CODE, year, g, all_of(outcome)) %>%
-    filter(!is.na(.data[[outcome]]))
-  
-  att <- att_gt(
-    yname   = outcome,
-    tname   = "year",
-    idname  = "practice_id",
-    gname   = "g",
-    xformla = ~ 1,
-    data    = d,
-    panel   = TRUE,
-    allow_unbalanced_panel = TRUE,
-    control_group = control_group,
-    est_method = "reg"
-  )
-  
-  dyn <- aggte(
-    att,
-    type  = "dynamic",
-    min_e = -4,
-    max_e = 4,
-    na.rm = TRUE
-  )
-  grp  <- aggte(att, type = "group",  na.rm = TRUE)
-  simp <- aggte(att, type = "simple", na.rm = TRUE)
-  
-  list(
-    att  = att,
-    dyn  = dyn,
-    grp  = grp,
-    simp = simp,
-    p_att = ggdid(att, title = paste0("Group-time ATT: ", outcome_label)),
-    p_dyn = ggdid(dyn, title = paste0("Event study: ", outcome_label)),
-    p_grp = ggdid(grp, title = paste0("Cohort effects: ", outcome_label))
-  )
-}
 
 set.seed(123)
 
@@ -2770,7 +1984,7 @@ results_table %>%
 
 
 
-treatment_timing <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/takeover_events_all_chain.csv")%>%
+treatment_timing <- read.csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/takeover_events_all_chain.csv"))%>%
   dplyr::rename(PRACTICE_CODE = pre_practice_code)%>%
   dplyr::mutate(g = takeover_year)
 
@@ -2854,22 +2068,12 @@ set.seed(123)
 res_spend <- run_cs_did(panel_did, "nhs_funding",  "NHS funding")
 
 
-summary(res_spend$att)
-summary(res_spend$dyn)
-summary(res_spend$grp)
-summary(res_spend$simp)
-
-print(res_spend$p_att)
-print(res_spend$p_dyn)
-print(res_spend$p_grp)
-
-
 
 ####nhs spend models ####
 
 
 
-treatment_timing <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/takeover_events_all_chain.csv")%>%
+treatment_timing <- read.csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/takeover_events_all_chain.csv"))%>%
   dplyr::rename(PRACTICE_CODE = pre_practice_code)%>%
   dplyr::mutate(g = takeover_year)
 
@@ -3018,7 +2222,7 @@ workforce_raw <-workforce_annual %>% dplyr::select(PRAC_CODE, TOTAL_GP_FTE, TOTA
 metrics_wide <- merge(metrics_wide, workforce_raw, by=c("year", "PRACTICE_CODE"), all=T)
 
 
-treatment_timing <- read.csv("~/Library/CloudStorage/OneDrive-Nexus365/Documents/GitHub/GitHub_new/gp_takeovers/Data/takeover_events_all_chain.csv")%>%
+treatment_timing <- read.csv(curl("https://raw.githubusercontent.com/BenGoodair/gp_takeovers/refs/heads/main/Data/takeover_events_all_chain.csv"))%>%
   dplyr::rename(PRACTICE_CODE = pre_practice_code)%>%
   dplyr::mutate(g = takeover_year)
 
@@ -3697,7 +2901,7 @@ p_hist <- ggplot(
     strip.background = element_rect(fill = "grey95")
   )
 
-(p_heat | p_line) /
+(p_heat ) /
   (p_raster ) +
   plot_annotation(
     tag_levels = "A",
